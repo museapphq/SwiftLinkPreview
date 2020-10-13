@@ -6,6 +6,7 @@
 //  Copyright © 2016 leocardz.com. All rights reserved.
 //
 import Foundation
+import MobileCoreServices
 
 public enum SwiftLinkResponseKey: String {
     case url
@@ -340,6 +341,23 @@ extension SwiftLinkPreview {
                     return
                 }
             }
+            guard
+                let httpResponse = urlResponse as? HTTPURLResponse,
+                let contentType = httpResponse.value(forHTTPHeaderField: "content-type") as? String,
+                let parsedType = Regex.pregMatchFirst(contentType, regex: "([^/\\s;]*/[^/\\s;]*)"),
+                let type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, parsedType as CFString, nil)?.takeRetainedValue()
+            else {
+                onError(.cannotBeOpened("Unknown content type"))
+                return
+            }
+            let strType = type as String
+            guard
+                UTTypeConformsTo(type, kUTTypeText)
+            else {
+                onError(.cannotBeOpened("Invalid content type: "))
+                return
+            }
+
             if let data = data, let urlResponse = urlResponse, let encoding = urlResponse.textEncodingName,
                 let source = NSString( data: data, encoding:
                     CFStringConvertEncodingToNSStringEncoding( CFStringConvertIANACharSetNameToEncoding( encoding as CFString ) ) ) {

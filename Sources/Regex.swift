@@ -71,7 +71,7 @@ class Regex {
             let limit = 300000
 
             if string.count > limit {
-                string.split(by: limit).forEach {
+                string.split(by: limit).first.map {
                     matches.append(contentsOf: rx.matches(in: string, options: [], range: NSRange($0.startIndex..., in: $0)))
                 }
             } else {
@@ -105,7 +105,7 @@ class Regex {
     // Return tag pattern
     static func tagPattern(_ tag: String) -> String {
 
-        return "<" + tag + "(.*?)>(.*?)</" + tag + ">"
+        return "<" + tag + "([^>]*?)>([^<>]*?)</" + tag + ">"
 
     }
 
