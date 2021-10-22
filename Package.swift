@@ -11,7 +11,10 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftLinkPreview",
-    platforms: [.iOS(.v13), .macOS(.v10_15)],
+    platforms: [
+        .macOS(.v10_15),
+        .iOS(.v9),
+    ],
     products: [
       .library(name: "SwiftLinkPreview",
                targets: ["SwiftLinkPreview"])

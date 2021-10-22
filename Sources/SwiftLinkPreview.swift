@@ -394,21 +394,23 @@ extension SwiftLinkPreview {
                     return
                 }
             }
-            guard
-                let httpResponse = urlResponse as? HTTPURLResponse,
-                let contentType = httpResponse.value(forHTTPHeaderField: "content-type") as? String,
-                let parsedType = Regex.pregMatchFirst(contentType, regex: "([^/\\s;]*/[^/\\s;]*)"),
-                let type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, parsedType as CFString, nil)?.takeRetainedValue()
-            else {
-                onError(.cannotBeOpened("Unknown content type"))
-                return
-            }
-            let strType = type as String
-            guard
-                UTTypeConformsTo(type, kUTTypeText)
-            else {
-                onError(.cannotBeOpened("Invalid content type: "))
-                return
+            if #available(iOS 13.0, *) {
+                guard
+                    let httpResponse = urlResponse as? HTTPURLResponse,
+                    let contentType = httpResponse.value(forHTTPHeaderField: "content-type"),
+                    let parsedType = Regex.pregMatchFirst(contentType, regex: "([^/\\s;]*/[^/\\s;]*)"),
+                    let type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, parsedType as CFString, nil)?.takeRetainedValue()
+                else {
+                    onError(.cannotBeOpened("Unknown content type"))
+                    return
+                }
+                let strType = type as String
+                guard
+                    UTTypeConformsTo(type, kUTTypeText)
+                else {
+                    onError(.cannotBeOpened("Invalid content type: "))
+                    return
+                }
             }
 
             if let data = data, let urlResponse = urlResponse, let encoding = urlResponse.textEncodingName,
