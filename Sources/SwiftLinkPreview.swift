@@ -6,7 +6,11 @@
 //  Copyright © 2016 leocardz.com. All rights reserved.
 //
 import Foundation
+#if !os(macOS)
 import MobileCoreServices
+#else
+import CoreServices
+#endif
 
 public enum SwiftLinkResponseKey: String {
     case url
