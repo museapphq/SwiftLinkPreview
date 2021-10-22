@@ -253,6 +253,9 @@ extension SwiftLinkPreview {
         request.httpMethod = "HEAD"
 
         task = session.dataTask(with: request, completionHandler: { data, response, error in
+            guard !cancellable.isCancelled
+            else { return }
+
             if error != nil {
                 self.workQueue.async {
                     if !cancellable.isCancelled {
@@ -263,12 +266,57 @@ extension SwiftLinkPreview {
             } else {
                 if let finalResult = response?.url {
                     if (finalResult.absoluteString == url.absoluteString) {
-                        self.workQueue.async {
-                            if !cancellable.isCancelled {
-                                completion(url)
-                            }
+                        if response?.mimeType?.contains( "/html" ) ?? false {
+                            var request = URLRequest( url: url )
+                            request.addValue( "text/html,application/xhtml+xml,application/xml", forHTTPHeaderField: "Accept" )
+                            self.session.dataTask( with: request, completionHandler: { data, response, error in
+                                guard !cancellable.isCancelled
+                                else { return }
+
+                                if error != nil {
+                                    self.workQueue.async {
+                                        if !cancellable.isCancelled {
+                                            onError( .cannotBeOpened( "\(url.absoluteString): \(error.debugDescription)" ) )
+                                        }
+                                    }
+                                    return
+                                }
+
+                                if let response = response, let data = data {
+                                    let encoding = response.textEncodingName.flatMap {
+                                        String.Encoding( rawValue: CFStringConvertEncodingToNSStringEncoding(
+                                                CFStringConvertIANACharSetNameToEncoding( $0 as CFString ) ) )
+                                    } ?? .utf8
+                                    if let html = String( data: data, encoding: encoding ) {
+                                        for meta in Regex.pregMatchAll( html, regex: Regex.metatagPattern, index: 1 ) {
+                                            if (meta.contains( "http-equiv=\"refresh\"" ) || meta.contains( "http-equiv='refresh'" )),
+                                               let value = Regex.pregMatchFirst( meta, regex: Regex.metatagContentPattern, index: 2 )?.decoded.extendedTrim,
+                                               let redirectString = value.split( separator: ";" )
+                                                                         .first( where: { $0.lowercased().starts( with: "url=" ) } )?
+                                                                         .split( separator: "=", maxSplits: 1 ).last,
+                                               let redirectURL = URL( string: self.addImagePrefixIfNeeded( String( redirectString ), url: url ) ) {
+                                                self.unshortenURL( redirectURL, cancellable: cancellable, completion: completion, onError: onError )
+                                                return
+                                            }
+                                        }
+                                    }
+                                }
+
+                                self.workQueue.async {
+                                    if !cancellable.isCancelled {
+                                        completion( url )
+                                    }
+                                }
+                            } ).resume()
                         }
-                        task = nil
+                        else {
+                            self.workQueue.async {
+                                if !cancellable.isCancelled {
+                                    completion( url )
+                                }
+                            }
+                            task = nil
+                        }
                     } else {
                         task?.cancel()
                         task = nil
@@ -333,6 +381,7 @@ extension SwiftLinkPreview {
             }
             var request = URLRequest( url: sourceUrl )
             request.addValue("text/html,application/xhtml+xml,application/xml", forHTTPHeaderField: "Accept")
+            request.addValue("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36", forHTTPHeaderField: "user-Agent")
             let (data, urlResponse, error) = session.synchronousDataTask(with: request )
             if let error = error {
                 if !cancellable.isCancelled {
@@ -525,7 +574,7 @@ extension SwiftLinkPreview {
                             let value = value.decoded.extendedTrim
                             if tag == "image" {
                                 let value = addImagePrefixIfNeeded(value, result: result)
-                                if value.isImage() { result.set(value, for: key) }
+                                if value.isOpenGraphImage(){ result.set(value, for: key) }
                             } else if tag == "video" {
                                 let value = addImagePrefixIfNeeded(value, result: result)
                                 if value.isVideo() { result.set(value, for: key) }
@@ -590,16 +639,32 @@ extension SwiftLinkPreview {
             let images = result.images
 
             if images == nil || images?.isEmpty ?? true {
-                let values = Regex.pregMatchAll(htmlCode, regex: Regex.imageTagPattern, index: 2)
-                if !values.isEmpty {
-                    let imgs = values.map { self.addImagePrefixIfNeeded($0, result: result) }
 
-                    result.images = imgs
-                    result.image = imgs.first
+                // Should look for <meta property="og:image" content=""/> first instead of <img/> tag.
+                let values = Regex.pregMatchAll(htmlCode, regex: Regex.secondaryImageTagPattern, index: 2)
+                if !values.isEmpty {
+                    result.images = values
+                    result.image = values.first
+                } else {
+                    // If no OpenGraph image found pick any from <img/> tag to show.
+                    let values = Regex.pregMatchAll(htmlCode, regex: Regex.imageTagPattern, index: 2)
+                    if !values.isEmpty {
+                        let imgs = values.map { self.addImagePrefixIfNeeded($0, result: result) }
+                        result.images = imgs
+                        result.image = imgs.first
+                    }
                 }
+
             }
         } else {
-            result.images = [self.addImagePrefixIfNeeded(mainImage ?? String(), result: result)]
+                let values = Regex.pregMatchAll(htmlCode, regex: Regex.secondaryImageTagPattern, index: 2)
+                if !values.isEmpty {
+                    result.images = values
+                    result.image = values.first
+                }
+                else{
+                    result.images = [self.addImagePrefixIfNeeded(mainImage ?? String(), result: result)]
+                }
         }
         return result
     }
@@ -621,25 +686,39 @@ extension SwiftLinkPreview {
     }
 
     // Add prefix image if needed
-    fileprivate func addImagePrefixIfNeeded(_ image: String, result: Response) -> String {
+    fileprivate func addImagePrefixIfNeeded(_ image: String, url: URL) -> String {
+        addImagePrefixIfNeeded( image, canonicalUrl: self.extractCanonicalURL( url ), finalUrl: self.extractInURLRedirectionIfNeeded( url ).absoluteString )
+    }
 
+    fileprivate func addImagePrefixIfNeeded(_ image: String, result: Response) -> String {
+        addImagePrefixIfNeeded( image, canonicalUrl: result.canonicalUrl, finalUrl: result.finalUrl?.absoluteString )
+    }
+
+    fileprivate func addImagePrefixIfNeeded(_ image: String, canonicalUrl: String?, finalUrl: String?) -> String {
         var image = image
 
-        if let canonicalUrl = result.canonicalUrl, let finalUrl = result.finalUrl?.absoluteString {
-            if finalUrl.hasPrefix("https:") {
+        // TODO: account for HTML <base>
+        if let canonicalUrl = canonicalUrl, let finalUrl = finalUrl, let proto = finalUrl.split(separator: ":").first {
+            if image.hasPrefix("/") {
                 if image.hasPrefix("//") {
-                    image = "https:" + image
-                } else if image.hasPrefix("/") {
-                    image = "https://" + canonicalUrl + image
+                    // image url is //domain/path
+                    image = proto + ":" + image
+                } else {
+                    // image url is /path relative to base url
+                    image = proto + "://" + canonicalUrl + image
                 }
-            } else if image.hasPrefix("//") {
-                image = "http:" + image
-            } else if image.hasPrefix("/") {
-                image = "http://" + canonicalUrl + image
+            } else if !image.contains("://") {
+                // image is relative to request url
+                let requestUrl = removeSuffixIfNeeded(finalUrl)
+                if requestUrl.hasSuffix("/") {
+                    image = requestUrl + image
+                } else {
+                    image = (requestUrl as NSString).deletingLastPathComponent + "/" + image
+                }
             }
         }
 
-        return removeSuffixIfNeeded(image)
+        return image
 
     }
 

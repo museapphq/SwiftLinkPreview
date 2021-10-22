@@ -1,6 +1,9 @@
 # Change Log
 
 #### 3.x Releases
+- `3.4.x` Releases - [3.4.0](#340)
+- `3.3.x` Releases - [3.3.0](#330)
+- `3.2.x` Releases - [3.2.0](#320)
 - `3.1.x` Releases - [3.1.0](#310)
 - `3.0.x` Releases - [3.0.0](#300) | [3.0.1](#301)
 
@@ -18,6 +21,40 @@
 - `0.0.x` Releases - [0.0.2](#002) | [0.0.3](#003)
 
 ---
+
+## [3.4.0](https://github.com/LeonardoCardoso/Swift-Link-Preview/releases/tag/3.4.0)
+
+#### Added
+- Added support for m3u8 lists [#138](https://github.com/LeonardoCardoso/SwiftLinkPreview/issues/138)
+	- Added by [jeffhodsdon](https://github.com/jeffhodsdon)
+
+#### Changed
+- Resolve relative image URLs against the request URL. [#136](https://github.com/LeonardoCardoso/SwiftLinkPreview/issues/136)
+  	- Changed by [lhunath](https://github.com/lhunath)
+- Video parsing fix [#138](https://github.com/LeonardoCardoso/SwiftLinkPreview/issues/138)
+	- Changed by [jeffhodsdon](https://github.com/jeffhodsdon)
+- Fixed github link image for `og:image` property. [#145](https://github.com/LeonardoCardoso/SwiftLinkPreview/issues/145)
+  	- Changed by [MuhtasimTanmoy](https://github.com/MuhtasimTanmoy/)
+
+## [3.3.0](https://github.com/LeonardoCardoso/Swift-Link-Preview/releases/tag/3.3.0)
+
+#### Changed
+- Handle empty landing pages with HTML meta redirects
+  	- Changed by [lhunath](https://github.com/lhunath)
+- fixed youtube and open graph tags image metadata issues
+  	- Changed by [nafis042](https://github.com/nafis042)
+- Fixed github link image for `og:image` property.
+  	- Changed by [MuhtasimTanmoy](https://github.com/MuhtasimTanmoy/)
+
+## [3.2.0](https://github.com/LeonardoCardoso/Swift-Link-Preview/releases/tag/3.2.0)
+
+#### Changed
+- Updated Package.swift to swift-tools-version:4.2
+  	- Changed by [skunkworker](https://github.com/skunkworker)
+- Fixes the NSRange to use a String defined range instead of inferring length from the count property
+    - Changed by [adamwulf](https://github.com/adamwulf)
+
+
 ## [3.1.0](https://github.com/LeonardoCardoso/Swift-Link-Preview/releases/tag/3.1.0)
 
 #### Changed

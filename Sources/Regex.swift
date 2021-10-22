@@ -11,8 +11,11 @@ import Foundation
 class Regex {
 
     static let imagePattern = "(.+?)\\.(gif|jpg|jpeg|png|bmp)$"
+    static let openGraphImagePattern = "(.+?)\\.(gif||jpg|jpeg|png|bmp)$"
     static let videoTagPattern = "<video[^>]+src=\"([^\"]+)"
+    static let secondaryVideoTagPattern = "og:video\"(.+?)content=\"([^\"](.+?))\"(.+?)[/]?>"
     static let imageTagPattern = "<img(.+?)src=\"([^\"](.+?))\"(.+?)[/]?>"
+    static let secondaryImageTagPattern = "og:image\"(.+?)content=\"([^\"](.+?))\"(.+?)[/]?>"
     static let titlePattern = "<title(.*?)>(.*?)</title>"
     static let metatagPattern = "<meta(.*?)>"
     static let metatagContentPattern = "content=(\"(.*?)\")|('(.*?)')"
