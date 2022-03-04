@@ -39,26 +39,28 @@ open class SwiftLinkPreview: NSObject {
     static let titleMinimumRelevant: Int = 15
     static let decriptionMinimumRelevant: Int = 100
 
-    public var session: URLSession
+    public private(set) var session: URLSession!
     public let workQueue: DispatchQueue
     public let responseQueue: DispatchQueue
     public let cache: Cache
 
     public static let defaultWorkQueue = DispatchQueue.global(qos: .userInitiated)
+    private static let delegateQueue = OperationQueue()
 
     // MARK: - Constructor
 
     //Swift-only init with default parameters
-    @nonobjc public init(session: URLSession = URLSession.shared, workQueue: DispatchQueue = SwiftLinkPreview.defaultWorkQueue, responseQueue: DispatchQueue = DispatchQueue.main, cache: Cache = DisabledCache.instance) {
+    @nonobjc public init(sessionConfig: URLSessionConfiguration = URLSession.shared.configuration, workQueue: DispatchQueue = SwiftLinkPreview.defaultWorkQueue, responseQueue: DispatchQueue = DispatchQueue.main, cache: Cache = DisabledCache.instance) {
         self.workQueue = workQueue
         self.responseQueue = responseQueue
         self.cache = cache
-        self.session = session
+        super.init()
+        self.session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: Self.delegateQueue)
     }
 
     //Objective-C init with default parameters
     @objc public override init() {
-        let _session = URLSession.shared
+        let _sessionConfig = URLSession.shared.configuration
         let _workQueue: DispatchQueue = SwiftLinkPreview.defaultWorkQueue
         let _responseQueue: DispatchQueue = DispatchQueue.main
         let _cache: Cache  = DisabledCache.instance
@@ -66,13 +68,13 @@ open class SwiftLinkPreview: NSObject {
         self.workQueue = _workQueue
         self.responseQueue = _responseQueue
         self.cache = _cache
-        self.session = _session
+        super.init()
+        self.session = URLSession(configuration: _sessionConfig, delegate: self, delegateQueue: Self.delegateQueue)
     }
 
     //Objective-C init with paramaters.  nil objects will default.  Timeout values are ignored if InMemoryCache is disabled.
-    @objc public init(session: URLSession?, workQueue: DispatchQueue?, responseQueue: DispatchQueue?, disableInMemoryCache: Bool, cacheInvalidationTimeout: TimeInterval, cacheCleanupInterval: TimeInterval) {
-
-        let _session = session ?? URLSession.shared
+    @objc public init(sessionConfig: URLSessionConfiguration?, workQueue: DispatchQueue?, responseQueue: DispatchQueue?, disableInMemoryCache: Bool, cacheInvalidationTimeout: TimeInterval, cacheCleanupInterval: TimeInterval) {
+        let _sessionConfig = sessionConfig ?? URLSession.shared.configuration
         let _workQueue = workQueue ?? SwiftLinkPreview.defaultWorkQueue
         let _responseQueue = responseQueue ?? DispatchQueue.main
         let _cache: Cache  = disableInMemoryCache ? DisabledCache.instance : InMemoryCache(invalidationTimeout: cacheInvalidationTimeout, cleanupInterval: cacheCleanupInterval)
@@ -80,8 +82,8 @@ open class SwiftLinkPreview: NSObject {
         self.workQueue = _workQueue
         self.responseQueue = _responseQueue
         self.cache = _cache
-        self.session = _session
-
+        super.init()
+        self.session = URLSession(configuration: _sessionConfig, delegate: self, delegateQueue: Self.delegateQueue)
     }
 
     // MARK: - Functions
@@ -90,10 +92,6 @@ open class SwiftLinkPreview: NSObject {
     @nonobjc @discardableResult open func preview(_ text: String, onSuccess: @escaping (Response) -> Void, onError: @escaping (PreviewError) -> Void) -> Cancellable {
 
         let cancellable = Cancellable()
-
-        self.session = URLSession(configuration: self.session.configuration,
-                                  delegate: self, // To handle redirects
-            delegateQueue: self.session.delegateQueue)
 
         let successResponseQueue = { (response: Response) in
             if !cancellable.isCancelled {
@@ -428,7 +426,6 @@ extension SwiftLinkPreview {
                     onError(.cannotBeOpened("Unknown content type"))
                     return
                 }
-                let strType = type as String
                 guard
                     UTTypeConformsTo(type, kUTTypeText)
                 else {
