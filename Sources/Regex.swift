@@ -97,7 +97,7 @@ class Regex {
 
         return results.map {
             let range = $0.range(at: index)
-            if text.count > range.location + range.length {
+            if text.count >= range.location + range.length {
                 return (text as NSString).substring(with: range)
             } else {
                 return ""
