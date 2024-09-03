@@ -8,7 +8,7 @@
 
 import Foundation
 
-public struct Response {
+public struct Response: Codable {
 
     public internal(set) var baseURL: String?
     public internal(set) var url: URL?
