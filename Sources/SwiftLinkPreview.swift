@@ -123,6 +123,7 @@ open class SwiftLinkPreview: NSObject {
 
                     self.unshortenURL(url, cancellable: cancellable, completion: { unshortened in
                         if let result = self.cache.slp_getCachedResponse(url: unshortened.absoluteString) {
+                            self.cache.slp_setCachedResponse(url: url.absoluteString, response: result)
                             successResponseQueue(result)
                         } else {
                             
