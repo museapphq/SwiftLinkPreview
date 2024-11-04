@@ -1,4 +1,4 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.7
 //
 //  Package.swift
 //  SwiftLinkPreview
@@ -13,7 +13,7 @@ let package = Package(
     name: "SwiftLinkPreview",
     platforms: [
         .macOS(.v10_15),
-        .iOS(.v9),
+        .iOS(.v14),
     ],
     products: [
       .library(name: "SwiftLinkPreview",
