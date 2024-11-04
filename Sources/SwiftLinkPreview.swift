@@ -6,11 +6,7 @@
 //  Copyright © 2016 leocardz.com. All rights reserved.
 //
 import Foundation
-#if !os(macOS)
-import MobileCoreServices
-#else
-import CoreServices
-#endif
+import UniformTypeIdentifiers
 
 public enum SwiftLinkResponseKey: String {
     case url
@@ -134,7 +130,6 @@ open class SwiftLinkPreview: NSObject {
                             result.baseURL = result.baseURL ?? (result.canonicalUrl?.starts(with: "http") == false ? "https://\(result.canonicalUrl!)" : result.canonicalUrl)
 
                             self.extractInfo(response: result, cancellable: cancellable, completion: {
-
                                 result.title = $0.title
                                 result.description = $0.description
 
@@ -239,10 +234,16 @@ open class SwiftLinkPreview: NSObject {
                 errorCode = 1
             case .invalidURL:
                 errorCode = 2
-            case .cannotBeOpened:
-                errorCode = 3
+//            case .cannotBeOpened:
+//                errorCode = 3
             case .parseError:
                 errorCode = 4
+            case .failedDownload:
+                errorCode = 5
+            case .unsupportedContentType:
+                errorCode = 6
+            case .nonHttpResponse:
+                errorCode = 7
             }
 
             onError(NSError(domain: "SwiftLinkPreviewDomain",
@@ -275,21 +276,21 @@ extension SwiftLinkPreview {
 
         if cancellable.isCancelled {return}
 
-        var task: URLSessionDataTask?
+        var strongTask: URLSessionDataTask?
         var request = URLRequest(url: url)
         request.httpMethod = "HEAD"
 
-        task = session.dataTask(with: request, completionHandler: { data, response, error in
+        let task = session.dataTask(with: request, completionHandler: { data, response, error in
             guard !cancellable.isCancelled
             else { return }
 
-            if error != nil {
+            if let error = error {
                 self.workQueue.async {
                     if !cancellable.isCancelled {
-                        onError(.cannotBeOpened("\(url.absoluteString): \(error.debugDescription)"))
+                        onError(.failedDownload(error))
                     }
                 }
-                task = nil
+                strongTask = nil
             } else {
                 if let finalResult = response?.url {
                     if (finalResult.absoluteString == url.absoluteString) {
@@ -300,10 +301,10 @@ extension SwiftLinkPreview {
                                 guard !cancellable.isCancelled
                                 else { return }
 
-                                if error != nil {
+                                if let error = error {
                                     self.workQueue.async {
                                         if !cancellable.isCancelled {
-                                            onError( .cannotBeOpened( "\(url.absoluteString): \(error.debugDescription)" ) )
+                                            onError( .failedDownload(error) )
                                         }
                                     }
                                     return
@@ -342,11 +343,11 @@ extension SwiftLinkPreview {
                                     completion( url )
                                 }
                             }
-                            task = nil
+                            strongTask = nil
                         }
                     } else {
-                        task?.cancel()
-                        task = nil
+                        strongTask?.cancel()
+                        strongTask = nil
                         self.unshortenURL(finalResult, cancellable: cancellable, completion: completion, onError: onError)
                     }
                 } else {
@@ -355,20 +356,12 @@ extension SwiftLinkPreview {
                             completion(url)
                         }
                     }
-                    task = nil
+                    strongTask = nil
                 }
             }
         })
-
-        if let task = task {
-            task.resume()
-        } else {
-            self.workQueue.async {
-                if !cancellable.isCancelled {
-                    onError(.cannotBeOpened(url.absoluteString))
-                }
-            }
-        }
+        strongTask = task
+        task.resume()
     }
 
     // Extract HTML code and the information contained on it
@@ -377,17 +370,14 @@ extension SwiftLinkPreview {
         guard !cancellable.isCancelled, let url = response.finalUrl else { return }
 
         func requestSync(sourceUrl: URL, request: URLRequest) -> (Bool, Data?, URLResponse?) {
-
             let (data, urlResponse, error) = session.synchronousDataTask(with: request )
             if let error = error {
                 if !cancellable.isCancelled {
-                    let details = "\(sourceUrl.absoluteString): \(error.localizedDescription)"
-                    onError( .cannotBeOpened( details ) )
+                    onError( .failedDownload(error) )
                     return (false, data, urlResponse)
                 }
             }
             return (true, data, urlResponse)
-
         }
 
         if url.absoluteString.isImage() {
@@ -412,30 +402,28 @@ extension SwiftLinkPreview {
             let (data, urlResponse, error) = session.synchronousDataTask(with: request )
             if let error = error {
                 if !cancellable.isCancelled {
-                    let details = "\(sourceUrl.absoluteString): \(error.localizedDescription)"
-                    onError( .cannotBeOpened( details ) )
+                    onError( .failedDownload(error) )
                     return
                 }
             }
-            if #available(iOS 13.0, *) {
-                guard
-                    let httpResponse = urlResponse as? HTTPURLResponse,
-                    let contentType = httpResponse.value(forHTTPHeaderField: "content-type"),
-                    let parsedType = Regex.pregMatchFirst(contentType, regex: "([^/\\s;]*/[^/\\s;]*)"),
-                    let type = UTTypeCreatePreferredIdentifierForTag(kUTTagClassMIMEType, parsedType as CFString, nil)?.takeRetainedValue()
-                else {
-                    onError(.cannotBeOpened("Unknown content type"))
-                    return
-                }
-                guard
-                    UTTypeConformsTo(type, kUTTypeText)
-                else {
-                    onError(.cannotBeOpened("Invalid content type: "))
-                    return
-                }
+            guard let httpResponse = urlResponse as? HTTPURLResponse else {
+                onError(.nonHttpResponse)
+                return
             }
 
-            if let data = data, let urlResponse = urlResponse, let encoding = urlResponse.textEncodingName,
+            let contentType = httpResponse.value(forHTTPHeaderField: "content-type") ?? "text/plain"
+
+            guard let parsedType = Regex.pregMatchFirst(contentType, regex: "([^/\\s;]*/[^/\\s;]*)") else {
+                onError(.unsupportedContentType(contentType))
+                return
+            }
+
+            guard let utType = UTType(mimeType: parsedType), utType.conforms(to: .text) else {
+                onError(.unsupportedContentType(contentType))
+                return
+            }
+
+            if let data = data, let encoding = httpResponse.textEncodingName,
                 let source = NSString( data: data, encoding:
                     CFStringConvertEncodingToNSStringEncoding( CFStringConvertIANACharSetNameToEncoding( encoding as CFString ) ) ) {
                 if !cancellable.isCancelled {
@@ -452,7 +440,7 @@ extension SwiftLinkPreview {
                             self.parseHtmlString(source as String, response: response, completion: completion)
                         }
                     } else {
-                        onError(.cannotBeOpened(sourceUrl.absoluteString))
+                        onError(.parseError(sourceUrl.absoluteString))
                     }
                 } catch _ {
                     if !cancellable.isCancelled {

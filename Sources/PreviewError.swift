@@ -6,12 +6,15 @@
 //  Copyright © 2016 leocardz.com. All rights reserved.
 //
 import Foundation
+import UniformTypeIdentifiers
 
 public enum PreviewError: Error, CustomStringConvertible {
     case noURLHasBeenFound(String?)
     case invalidURL(String?)
-    case cannotBeOpened(String?)
     case parseError(String?)
+    case nonHttpResponse
+    case failedDownload(_ error: Error)
+    case unsupportedContentType(_ type: String)
 
     public var description: String {
         switch(self) {
@@ -19,11 +22,19 @@ public enum PreviewError: Error, CustomStringConvertible {
             return NSLocalizedString("No URL has been found. \(reason(error))", comment: String())
         case .invalidURL(let error):
             return NSLocalizedString("This data is not valid URL. \(reason(error)).", comment: String())
-        case .cannotBeOpened(let error):
-            return NSLocalizedString("This URL cannot be opened. \(reason(error)).", comment: String())
+        case .failedDownload(let error):
+            return NSLocalizedString("Failed to fetch contents of URL. \(reason(error.localizedDescription)).", comment: String())
         case .parseError(let error):
             return NSLocalizedString("An error occurred when parsing the HTML. \(reason(error)).", comment: String())
+        case .unsupportedContentType(let type):
+            return NSLocalizedString("Unsupported content type: \(type)", comment: String())
+        case .nonHttpResponse:
+            return NSLocalizedString("Received invalid HTTP response", comment: String())
         }
+    }
+
+    public var localizedDescription: String {
+        return description
     }
 
     private func reason(_ error: String?) -> String {
