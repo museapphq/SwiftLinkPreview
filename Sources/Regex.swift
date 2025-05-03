@@ -11,8 +11,11 @@ import Foundation
 class Regex {
 
     static let imagePattern = "(.+?)\\.(gif|jpg|jpeg|png|bmp)$"
+    static let openGraphImagePattern = "(.+?)\\.(gif||jpg|jpeg|png|bmp)$"
     static let videoTagPattern = "<video[^>]+src=\"([^\"]+)"
+    static let secondaryVideoTagPattern = "og:video\"(.+?)content=\"([^\"](.+?))\"(.+?)[/]?>"
     static let imageTagPattern = "<img(.+?)src=\"([^\"](.+?))\"(.+?)[/]?>"
+    static let secondaryImageTagPattern = "og:image\"(.+?)content=\"([^\"](.+?))\"(.+?)[/]?>"
     static let titlePattern = "<title(.*?)>(.*?)</title>"
     static let metatagPattern = "<meta(.*?)>"
     static let metatagContentPattern = "content=(\"(.*?)\")|('(.*?)')"
@@ -40,9 +43,9 @@ class Regex {
 
             let rx = try NSRegularExpression(pattern: regex, options: [.caseInsensitive])
 
-            if let match = rx.firstMatch(in: string, options: [], range: NSRange(location: 0, length: string.count)) {
+            if let match = rx.firstMatch(in: string, options: [], range:NSRange(string.startIndex..., in: string)) {
 
-                var result: [String] = Regex.stringMatches([match], text: string, index: index)
+                let result: [String] = Regex.stringMatches([match], text: string, index: index)
                 return result.count == 0 ? nil : result[0]
 
             } else {
@@ -71,11 +74,11 @@ class Regex {
             let limit = 300000
 
             if string.count > limit {
-                string.split(by: limit).forEach {
-                    matches.append(contentsOf: rx.matches(in: string, options: [], range: NSRange(location: 0, length: $0.count)))
+                string.split(by: limit).first.map {
+                    matches.append(contentsOf: rx.matches(in: string, options: [], range: NSRange($0.startIndex..., in: $0)))
                 }
             } else {
-                matches.append(contentsOf: rx.matches(in: string, options: [], range: NSRange(location: 0, length: string.count)))
+                matches.append(contentsOf: rx.matches(in: string, options: [], range: NSRange(string.startIndex..., in: string)))
             }
 
             return !matches.isEmpty ? Regex.stringMatches(matches, text: string, index: index) : []
@@ -105,7 +108,7 @@ class Regex {
     // Return tag pattern
     static func tagPattern(_ tag: String) -> String {
 
-        return "<" + tag + "(.*?)>(.*?)</" + tag + ">"
+        return "<" + tag + "([^>]*?)>([^<>]*?)</" + tag + ">"
 
     }
 
